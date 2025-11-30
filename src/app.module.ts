@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { BullModule } from '@nestjs/bullmq';
+import { ConfigModule } from '@nestjs/config';
+import { HttpModule } from '@nestjs/axios';
+import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { UserModule } from '@modules/user/user.module';
 import { TenantModule } from '@modules/tenant/tenant.module';
-import { typeOrmConfig } from '@config/typeorm.config';
+import { IngestionModule } from '@modules/ingestion/ingestion.module';
 
 @Module({
   imports: [
@@ -15,26 +15,17 @@ import { typeOrmConfig } from '@config/typeorm.config';
       envFilePath: '.env',
     }),
 
-    // Database
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: typeOrmConfig,
-      inject: [ConfigService],
+    // HTTP Client
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
     }),
 
-    // Redis & Queue
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        connection: {
-          host: configService.get('REDIS_HOST') || 'localhost',
-          port: configService.get<number>('REDIS_PORT') || 6379,
-        },
-      }),
-      inject: [ConfigService],
-    }),
+    // Database (Prisma)
+    PrismaModule,
 
     // Feature Modules
+    IngestionModule,
     AuthModule,
     UserModule,
     TenantModule,

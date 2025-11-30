@@ -4,11 +4,9 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User } from './entities/user.entity';
-import { Player } from './entities/player.entity';
+import { PrismaService } from '@/prisma/prisma.service';
+import { User, Player } from '@prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LinkPlayerDto } from './dto/link-player.dto';
 import { CocApiService } from '@modules/ingestion/services/coc-api.service';
@@ -16,16 +14,13 @@ import { CocApiService } from '@modules/ingestion/services/coc-api.service';
 @Injectable()
 export class UserService {
   constructor(
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
-    @InjectRepository(Player)
-    private playerRepository: Repository<Player>,
-    private cocApiService: CocApiService,
+    private readonly prisma: PrismaService,
+    private readonly cocApiService: CocApiService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     // Check if email already exists
-    const existingEmail = await this.userRepository.findOne({
+    const existingEmail = await this.prisma.user.findUnique({
       where: { email: createUserDto.email },
     });
     if (existingEmail) {
@@ -33,7 +28,7 @@ export class UserService {
     }
 
     // Check if username already exists
-    const existingUsername = await this.userRepository.findOne({
+    const existingUsername = await this.prisma.user.findUnique({
       where: { username: createUserDto.username },
     });
     if (existingUsername) {
@@ -44,33 +39,43 @@ export class UserService {
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
     // Create user
-    const user = this.userRepository.create({
-      ...createUserDto,
-      password: hashedPassword,
+    const user = await this.prisma.user.create({
+      data: {
+        ...createUserDto,
+        password: hashedPassword,
+      },
     });
 
-    return this.userRepository.save(user);
+    return user;
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { email } });
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
   async findByUsername(username: string): Promise<User | null> {
-    return this.userRepository.findOne({ where: { username } });
+    return this.prisma.user.findUnique({ where: { username } });
   }
 
   async findById(id: string): Promise<User> {
-    const user = await this.userRepository.findOne({
+    const user = await this.prisma.user.findUnique({
       where: { id },
-      relations: ['memberships', 'memberships.tenant'],
+      include: {
+        memberships: {
+          include: {
+            tenant: true,
+          },
+        },
+      },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    return user;
+    // Remove password from response
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword as User;
   }
 
   /**
@@ -99,7 +104,7 @@ export class UserService {
     const playerData = await this.cocApiService.getPlayer(normalizedTag);
 
     // Check if player is already linked
-    const existingPlayer = await this.playerRepository.findOne({
+    const existingPlayer = await this.prisma.player.findUnique({
       where: { playerTag: normalizedTag },
     });
 
@@ -108,36 +113,41 @@ export class UserService {
     }
 
     // Create player record
-    const player = this.playerRepository.create({
-      playerTag: normalizedTag,
-      playerName: playerData.name,
-      townHallLevel: playerData.townHallLevel,
-      expLevel: playerData.expLevel,
-      trophies: playerData.trophies,
-      clanTag: playerData.clan?.tag,
-      clanName: playerData.clan?.name,
-      rawData: playerData,
-      lastSyncedAt: new Date(),
-      isVerified: true,
-      userId,
+    const player = await this.prisma.player.create({
+      data: {
+        playerTag: normalizedTag,
+        playerName: playerData.name,
+        townHallLevel: playerData.townHallLevel,
+        expLevel: playerData.expLevel,
+        trophies: playerData.trophies,
+        clanTag: playerData.clan?.tag,
+        clanName: playerData.clan?.name,
+        rawData: playerData,
+        lastSyncedAt: new Date(),
+        isVerified: true,
+        userId,
+      },
     });
 
-    return this.playerRepository.save(player);
+    return player;
   }
 
   /**
    * Get all players linked to a user
    */
   async getUserPlayers(userId: string): Promise<Player[]> {
-    return this.playerRepository.find({
+    return this.prisma.player.findMany({
       where: { userId },
-      order: { createdAt: 'DESC' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async updateLastLogin(userId: string): Promise<void> {
-    await this.userRepository.update(userId, {
-      lastLoginAt: new Date(),
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        lastLoginAt: new Date(),
+      },
     });
   }
 }
