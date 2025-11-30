@@ -1,21 +1,11 @@
-import { IsString, Matches } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class LinkPlayerDto {
-  @ApiProperty({
-    example: '#2PP',
-    description: 'Clash of Clans player tag',
-  })
   @IsString()
-  @Matches(/^#?[0289PYLQGRJCUV]+$/, {
-    message: 'Invalid player tag format',
-  })
+  @IsNotEmpty()
   playerTag: string;
 
-  @ApiProperty({
-    example: 'your-api-token-from-game',
-    description: 'API token from CoC in-game settings for verification',
-  })
   @IsString()
+  @IsNotEmpty()
   apiToken: string;
 }
