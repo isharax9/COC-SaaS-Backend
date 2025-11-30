@@ -1,0 +1,269 @@
+// Prisma Schema for COC-SaaS
+// PostgreSQL Database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// ENUMS
+// =============================================
+
+enum Role {
+  MEMBER
+  ELDER
+  CO_LEADER
+  LEADER
+  SUPER_ADMIN
+}
+
+// =============================================
+// USER MANAGEMENT
+// =============================================
+
+model User {
+  id               String   @id @default(uuid())
+  email            String   @unique
+  username         String   @unique
+  password         String
+  displayName      String?
+  avatarUrl        String?
+  isPlatformAdmin  Boolean  @default(false)
+  isEmailVerified  Boolean  @default(false)
+  lastLoginAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  isDeleted        Boolean  @default(false)
+
+  // Relations
+  players          Player[]
+  memberships      Membership[]
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model Player {
+  id             String   @id @default(uuid())
+  userId         String
+  playerTag      String   @unique
+  playerName     String
+  townHallLevel  Int
+  expLevel       Int      @default(0)
+  trophies       Int      @default(0)
+  clanTag        String?
+  clanName       String?
+  rawData        Json?
+  lastSyncedAt   DateTime
+  isVerified     Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  isDeleted      Boolean  @default(false)
+
+  // Relations
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([playerTag])
+  @@index([clanTag])
+  @@map("players")
+}
+
+// =============================================
+// MULTI-TENANCY (CLANS)
+// =============================================
+
+model Tenant {
+  id                String   @id @default(uuid())
+  clanTag           String   @unique
+  clanName          String
+  clanBadgeUrl      String?
+  clanLevel         Int      @default(0)
+  memberCount       Int      @default(0)
+  description       String?
+  settings          Json?
+  isActive          Boolean  @default(true)
+  lastSyncedAt      DateTime
+  verifiedApiToken  String?
+  rawData           Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  isDeleted         Boolean  @default(false)
+
+  // Relations
+  memberships       Membership[]
+  wars              War[]
+  channels          Channel[]
+
+  @@index([clanTag])
+  @@index([isActive])
+  @@map("tenants")
+}
+
+model Membership {
+  id         String   @id @default(uuid())
+  userId     String
+  tenantId   String
+  role       Role     @default(MEMBER)
+  playerTag  String?
+  isActive   Boolean  @default(true)
+  joinedAt   DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  isDeleted  Boolean  @default(false)
+
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+  @@index([role])
+  @@map("memberships")
+}
+
+// =============================================
+// WAR TRACKING (Phase 2)
+// =============================================
+
+model War {
+  id             String   @id @default(uuid())
+  tenantId       String
+  warTag         String?  @unique
+  opponentTag    String
+  opponentName   String
+  teamSize       Int
+  startTime      DateTime
+  endTime        DateTime
+  state          String   // notInWar, preparation, inWar, warEnded
+  result         String?  // win, lose, tie
+  teamStars      Int      @default(0)
+  opponentStars  Int      @default(0)
+  teamDestruction Float   @default(0)
+  opponentDestruction Float @default(0)
+  rawData        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  isDeleted      Boolean  @default(false)
+
+  // Relations
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  participants   WarParticipant[]
+  attacks        Attack[]
+
+  @@index([tenantId])
+  @@index([state])
+  @@index([startTime])
+  @@map("wars")
+}
+
+model WarParticipant {
+  id             String   @id @default(uuid())
+  warId          String
+  playerTag      String
+  playerName     String
+  townHallLevel  Int
+  mapPosition    Int
+  opponentAttacks Int     @default(0)
+  bestOpponentAttack Json?
+  attacks        Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  war            War      @relation(fields: [warId], references: [id], onDelete: Cascade)
+
+  @@index([warId])
+  @@index([playerTag])
+  @@map("war_participants")
+}
+
+model Attack {
+  id                String   @id @default(uuid())
+  warId             String
+  attackerTag       String
+  attackerName      String
+  defenderTag       String
+  defenderName      String
+  stars             Int
+  destructionPercent Float
+  duration          Int?
+  order             Int
+  isFresh           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  // Relations
+  war               War      @relation(fields: [warId], references: [id], onDelete: Cascade)
+
+  @@index([warId])
+  @@index([attackerTag])
+  @@index([defenderTag])
+  @@map("attacks")
+}
+
+// =============================================
+// COMMUNICATION (Phase 3)
+// =============================================
+
+model Channel {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  minRole     Role     @default(MEMBER)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+
+  // Relations
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@index([tenantId])
+  @@map("channels")
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  channelId   String
+  authorId    String
+  content     String
+  type        String   @default("text") // text, image, system
+  attachments Json?
+  parentId    String?  // For threaded messages
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+
+  // Relations
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  reactions   Reaction[]
+
+  @@index([channelId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model Reaction {
+  id         String   @id @default(uuid())
+  messageId  String
+  userId     String
+  emoji      String
+  createdAt  DateTime @default(now())
+
+  // Relations
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@map("reactions")
+}
