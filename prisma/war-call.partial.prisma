@@ -1,0 +1,21 @@
+// ... existing schema above ...
+
+model WarCall {
+  id           String   @id @default(uuid())
+  warId        String
+  tenantId     String
+  playerTag    String
+  playerName   String
+  mapPosition  Int
+  status       String   @default("active") // active, expired, completed, cancelled
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  war          War      @relation(fields: [warId], references: [id], onDelete: Cascade)
+
+  @@index([warId])
+  @@index([tenantId])
+  @@index([playerTag])
+  @@map("war_calls")
+}
