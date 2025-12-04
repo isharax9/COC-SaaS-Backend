@@ -134,29 +134,30 @@ model Membership {
 // =============================================
 
 model War {
-  id             String   @id @default(uuid())
-  tenantId       String
-  warTag         String?  @unique
-  opponentTag    String
-  opponentName   String
-  teamSize       Int
-  startTime      DateTime
-  endTime        DateTime
-  state          String   // notInWar, preparation, inWar, warEnded
-  result         String?  // win, lose, tie
-  teamStars      Int      @default(0)
-  opponentStars  Int      @default(0)
-  teamDestruction Float   @default(0)
-  opponentDestruction Float @default(0)
-  rawData        Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  isDeleted      Boolean  @default(false)
+  id                  String   @id @default(uuid())
+  tenantId            String
+  warTag              String?  @unique
+  opponentTag         String
+  opponentName        String
+  teamSize            Int
+  startTime           DateTime
+  endTime             DateTime
+  state               String   // notInWar, preparation, inWar, warEnded
+  result              String?  // win, lose, tie
+  teamStars           Int      @default(0)
+  opponentStars       Int      @default(0)
+  teamDestruction     Float    @default(0)
+  opponentDestruction Float    @default(0)
+  rawData             Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  isDeleted           Boolean  @default(false)
 
   // Relations
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  participants   WarParticipant[]
-  attacks        Attack[]
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  participants        WarParticipant[]
+  attacks             Attack[]
+  calls               WarCall[]
 
   @@index([tenantId])
   @@index([state])
@@ -165,20 +166,20 @@ model War {
 }
 
 model WarParticipant {
-  id             String   @id @default(uuid())
-  warId          String
-  playerTag      String
-  playerName     String
-  townHallLevel  Int
-  mapPosition    Int
-  opponentAttacks Int     @default(0)
+  id                String   @id @default(uuid())
+  warId             String
+  playerTag         String
+  playerName        String
+  townHallLevel     Int
+  mapPosition       Int
+  opponentAttacks   Int      @default(0)
   bestOpponentAttack Json?
-  attacks        Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  attacks           Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Relations
-  war            War      @relation(fields: [warId], references: [id], onDelete: Cascade)
+  war               War      @relation(fields: [warId], references: [id], onDelete: Cascade)
 
   @@index([warId])
   @@index([playerTag])
@@ -186,26 +187,46 @@ model WarParticipant {
 }
 
 model Attack {
-  id                String   @id @default(uuid())
-  warId             String
-  attackerTag       String
-  attackerName      String
-  defenderTag       String
-  defenderName      String
-  stars             Int
+  id                 String   @id @default(uuid())
+  warId              String
+  attackerTag        String
+  attackerName       String
+  defenderTag        String
+  defenderName       String
+  stars              Int
   destructionPercent Float
-  duration          Int?
-  order             Int
-  isFresh           Boolean  @default(false)
-  createdAt         DateTime @default(now())
+  duration           Int?
+  order              Int
+  isFresh            Boolean  @default(false)
+  createdAt          DateTime @default(now())
 
   // Relations
-  war               War      @relation(fields: [warId], references: [id], onDelete: Cascade)
+  war                War      @relation(fields: [warId], references: [id], onDelete: Cascade)
 
   @@index([warId])
   @@index([attackerTag])
   @@index([defenderTag])
   @@map("attacks")
+}
+
+model WarCall {
+  id          String   @id @default(uuid())
+  warId       String
+  tenantId    String
+  playerTag   String
+  playerName  String
+  mapPosition Int
+  status      String   @default("active") // active, expired, completed, cancelled
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  war         War      @relation(fields: [warId], references: [id], onDelete: Cascade)
+
+  @@index([warId])
+  @@index([tenantId])
+  @@index([playerTag])
+  @@map("war_calls")
 }
 
 // =============================================
@@ -254,14 +275,14 @@ model Message {
 }
 
 model Reaction {
-  id         String   @id @default(uuid())
-  messageId  String
-  userId     String
-  emoji      String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
 
   // Relations
-  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
